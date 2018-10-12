@@ -396,7 +396,7 @@ def list_files(pod, pattern=None, include_details=False):
             date = "n/a"
 
         if include_details:
-            print("%s Date:%s Size:%s" % (file_name, date, file_metadata["size"]))
+            print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
         else:
             print file_name
 
