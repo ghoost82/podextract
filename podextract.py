@@ -12,7 +12,7 @@ import fnmatch
 import argparse
 import zlib
 from datetime import datetime
-from cStringIO import StringIO
+from io import BytesIO
 
 class POD:
     ## POD/EPD archive structure
@@ -104,13 +104,7 @@ class POD:
         return struct.unpack("I", dword)[0]
 
     def _get_c_string(self, string):
-        cstring = bytearray()
-        for offset in range(0, len(string)):
-            if (hex(ord(string[offset]))) == "0x0":
-                break
-            cstring.append(string[offset])
-            offset += 1
-        return cstring.decode("ascii")
+        return string.decode("ascii").split('\x00')[0]
 
     def parse_header(self):
         """
@@ -122,88 +116,90 @@ class POD:
         COPYRIGHT_LENGTH    =  80 #0x50
         NEXT_ARCHIVE_LENGTH =  80 #0x50
 
-        pod_file = open(self.pod_file, "rb")
-        self.magic = pod_file.read(4)
+        with open(self.pod_file, "rb") as pod_file:
+            self.magic = pod_file.read(4).decode("ascii")
 
-        #EPD
-        if self.magic == "dtxe":
-            # struct EPD_header { 272 bytes
-            #     char   magic[4]; // always dtxe
-            #     char   comment[256]; // 0x100
-            #     uint32 file_count;
-            #     uint32 version;
-            #     uint32 checksum;
-            # }
-            self.magic == "EPD"
-            self.comment      = self._get_c_string(pod_file.read(COMMENT_LENGTH_EPD))
-            self.file_count   = self._read_uint(pod_file)
-            self.version      = self._read_uint(pod_file)
-            self.checksum     = self._read_uint(pod_file)
-            self.index_offset = pod_file.tell()
+            #EPD
+            if self.magic == "dtxe":
+                # struct EPD_header { 272 bytes
+                #     char   magic[4]; // always dtxe
+                #     char   comment[256]; // 0x100
+                #     uint32 file_count;
+                #     uint32 version;
+                #     uint32 checksum;
+                # }
+                self.magic == "EPD"
+                self.comment      = self._get_c_string(pod_file.read(COMMENT_LENGTH_EPD))
+                self.file_count   = self._read_uint(pod_file)
+                self.version      = self._read_uint(pod_file)
+                self.checksum     = self._read_uint(pod_file)
+                self.index_offset = pod_file.tell()
 
-        elif self.magic == "POD2":
-            # struct POD2_header { // 96 bytes
-            #     char   magic[4]; // always POD2
-            #     uint32 checksum;
-            #     char   comment[80]; // 0x50
-            #     uint32 file_count;
-            #     uint32 audit_file_count;
-            # }
-            self.checksum          = self._read_uint(pod_file)
-            self.comment          = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
-            self.file_count       = self._read_uint(pod_file)
-            self.audit_file_count = self._read_uint(pod_file)
-            self.index_offset     = pod_file.tell()
+            elif self.magic == "POD2":
+                # struct POD2_header { // 96 bytes
+                #     char   magic[4]; // always POD2
+                #     uint32 checksum;
+                #     char   comment[80]; // 0x50
+                #     uint32 file_count;
+                #     uint32 audit_file_count;
+                # }
+                self.checksum          = self._read_uint(pod_file)
+                self.comment          = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
+                self.file_count       = self._read_uint(pod_file)
+                self.audit_file_count = self._read_uint(pod_file)
+                self.index_offset     = pod_file.tell()
 
-        elif self.magic == "POD3" or self.magic == "POD4" or self.magic == "POD5":
-            # struct POD3+_header { // 288 bytes POD3/4 / 368 bytes POD5
-            #     char   magic[4]; // always POD3/POD4/POD5
-            #     uint32 checksum;
-            #     char   comment[80]; // 0x50
-            #     uint32 file_count;
-            #     uint32 audit_file_count;
-            #     uint32 revision;
-            #     uint32 priority;
-            #     char   author[80]; // 0x50
-            #     char   copyright[80]; // 0x50
-            #     uint32 index_offset;
-            #     uint32 unknown10C;
-            #     uint32 size_index;
-            #     uint32 unknown114;
-            #     uint32 unknown118;
-            #     uint32 unknown11C;
-            #     char   next_pod_file[80]; // 0x50 // POD5 only
-            # }
-            self.checksum         = self._read_uint(pod_file)
-            self.comment          = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
-            self.file_count       = self._read_uint(pod_file)
-            self.audit_file_count = self._read_uint(pod_file)
-            self.revision         = self._read_uint(pod_file)
-            self.priority         = self._read_uint(pod_file)
-            self.author           = self._get_c_string(pod_file.read(AUTHOR_LENGTH))
-            self.copyright        = self._get_c_string(pod_file.read(COPYRIGHT_LENGTH))
-            self.index_offset     = self._read_uint(pod_file)
-            self._read_uint(pod_file) # skip unknown field9 at offset 0x10C
-            self.size_index   = self._read_uint(pod_file)
-            self._read_uint(pod_file) # skip unknown fieldB at offset 0x114
-            self._read_uint(pod_file) # skip unknown fieldC at offset 0x118
-            self._read_uint(pod_file) # skip unknown fieldD at offset 0x11C
+            elif self.magic == "POD3" or self.magic == "POD4" or self.magic == "POD5":
+                # struct POD3+_header { // 288 bytes POD3/4 / 368 bytes POD5
+                #     char   magic[4]; // always POD3/POD4/POD5
+                #     uint32 checksum;
+                #     char   comment[80]; // 0x50
+                #     uint32 file_count;
+                #     uint32 audit_file_count;
+                #     uint32 revision;
+                #     uint32 priority;
+                #     char   author[80]; // 0x50
+                #     char   copyright[80]; // 0x50
+                #     uint32 index_offset;
+                #     uint32 unknown10C;
+                #     uint32 size_index;
+                #     uint32 unknown114;
+                #     uint32 unknown118;
+                #     uint32 unknown11C;
+                #     char   next_pod_file[80]; // 0x50 // POD5 only
+                # }
+                self.checksum         = self._read_uint(pod_file)
+                self.comment          = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
+                self.file_count       = self._read_uint(pod_file)
+                self.audit_file_count = self._read_uint(pod_file)
+                self.revision         = self._read_uint(pod_file)
+                self.priority         = self._read_uint(pod_file)
+                self.author           = self._get_c_string(pod_file.read(AUTHOR_LENGTH))
+                self.copyright        = self._get_c_string(pod_file.read(COPYRIGHT_LENGTH))
+                self.index_offset     = self._read_uint(pod_file)
+                self._read_uint(pod_file) # skip unknown field9 at offset 0x10C
+                self.size_index   = self._read_uint(pod_file)
+                self._read_uint(pod_file) # skip unknown fieldB at offset 0x114
+                self._read_uint(pod_file) # skip unknown fieldC at offset 0x118
+                self._read_uint(pod_file) # skip unknown fieldD at offset 0x11C
 
-            if self.magic == "POD5":
-                self.next_pod_file = self._get_c_string(arc.read(NEXT_ARCHIVE_LENGTH))
+                if self.magic == "POD5":
+                    self.next_pod_file = self._get_c_string(arc.read(NEXT_ARCHIVE_LENGTH))
 
-        else:
-            # struct POD1_header { // 84 bytes
-            #     uint32 file_count;
-            #     char   comment[80]; // 0x50
-            # }
-            self.magic = "POD1"
-            pod_file.seek(0)
-            self.file_count   = self._read_uint(pod_file)
-            self.comment      = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
-            self.index_offset = pod_file.tell()
-
-        pod_file.close()
+            else:
+                # struct POD1_header { // 84 bytes
+                #     uint32 file_count;
+                #     char   comment[80]; // 0x50
+                # }
+                self.magic = "POD1"
+                pod_file.seek(0)
+                self.file_count   = self._read_uint(pod_file)
+                #self.comment      = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
+                self.comment      = pod_file.read(COMMENT_LENGTH_POD)
+                print("1: %s;" % self.comment)
+                self.comment      = self._get_c_string(self.comment)
+                print("2: %s;" % self.comment)
+                self.index_offset = pod_file.tell()
 
     def _metadata_struct(self):
         file_metadata = {
@@ -244,88 +240,88 @@ class POD:
         FILE_NAME_LENGTH_EPD  =  64 #0x40
         FILE_NAME_LENGTH_POD1 =  32 #0x20
 
-        pod_file = open(self.pod_file, "rb")
-        pod_file.seek(self.index_offset)
+        with open(self.pod_file, "rb") as pod_file:
+            pod_file.seek(self.index_offset)
 
-        for index in range(0, self.file_count):
+            for index in range(0, self.file_count):
 
-            metadata = self._metadata_struct()
+                metadata = self._metadata_struct()
 
-            if self.magic == "POD1":
-                # struct POD1_file { // 40 bytes
-                #     char   file_name[32]; // Zero terminated string // 0x20
-                #     uint32 file_size;
-                #     uint32 file_offset;
-                # }
-                file_name                     = self._get_c_string(pod_file.read(FILE_NAME_LENGTH_POD1))
-                metadata["size"]              = self._read_uint(pod_file)
-                metadata["offset"]            = self._read_uint(pod_file)
-                metadata["uncompressed_size"] = metadata["size"]
-
-            elif self.magic == "EPD":
-                # struct EPD_file { // 80 bytes
-                #     char   file_name[64]; // Zero terminated string // 0x40
-                #     uint32 file_size;
-                #     uint32 file_offset;
-                #     uint32 file_timestamp;
-                #     uint32 file_checksum;
-                # }
-                file_name                     = self._get_c_string(pod_file.read(FILE_NAME_LENGTH_EPD))
-                metadata["size"]              = self._read_uint(pod_file)
-                metadata["offset"]            = self._read_uint(pod_file)
-                metadata["timestamp"]         = self._read_uint(pod_file)
-                metadata["checksum"]          = self._read_uint(pod_file)
-                metadata["uncompressed_size"] = metadata["size"]
-
-            else:
-                # struct POD2+_file { // 20 bytes POD2/3 / 28 POD4+
-                #     uint32 file_path_offset;
-                #     uint32 file_size; // POD4+ this is the compressed size
-                #     uint32 file_offset;
-                #     uint32 file_uncompressed_size; // POD4+ only
-                #     uint32 file_compression_level; // POD4+ only
-                #     uint32 file_timestamp;
-                #     uint32 file_checksum;
-                # }
-                # char   file_name[256]; // Zero terminated string // 0x100
-                # Seek to the start if the index entrie
-                pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
-                metadata["path_offset"] = self._read_uint(pod_file)
-                metadata["size"]        = self._read_uint(pod_file)
-                metadata["offset"]      = self._read_uint(pod_file)
-                if self.magic == "POD4" or self.magic == "POD5":
-                    metadata["uncompressed_size"] = self._read_uint(pod_file)
-                    metadata["compression_level"] = self._read_uint(pod_file)
-                else:
+                if self.magic == "POD1":
+                    # struct POD1_file { // 40 bytes
+                    #     char   file_name[32]; // Zero terminated string // 0x20
+                    #     uint32 file_size;
+                    #     uint32 file_offset;
+                    # }
+                    file_name                     = self._get_c_string(pod_file.read(FILE_NAME_LENGTH_POD1))
+                    metadata["size"]              = self._read_uint(pod_file)
+                    metadata["offset"]            = self._read_uint(pod_file)
                     metadata["uncompressed_size"] = metadata["size"]
-                metadata["timestamp"]   = self._read_uint(pod_file)
-                metadata["checksum"]    = self._read_uint(pod_file)
 
-                # get filename from name table
-                # Seek to the file_name entrie
-                pod_file.seek(self.index_offset + (self.file_count * DIR_ENTRY_SIZE) + metadata["path_offset"])
-                file_name = self._get_c_string(pod_file.read(FILE_NAME_LENGTH))
+                elif self.magic == "EPD":
+                    # struct EPD_file { // 80 bytes
+                    #     char   file_name[64]; // Zero terminated string // 0x40
+                    #     uint32 file_size;
+                    #     uint32 file_offset;
+                    #     uint32 file_timestamp;
+                    #     uint32 file_checksum;
+                    # }
+                    file_name                     = self._get_c_string(pod_file.read(FILE_NAME_LENGTH_EPD))
+                    metadata["size"]              = self._read_uint(pod_file)
+                    metadata["offset"]            = self._read_uint(pod_file)
+                    metadata["timestamp"]         = self._read_uint(pod_file)
+                    metadata["checksum"]          = self._read_uint(pod_file)
+                    metadata["uncompressed_size"] = metadata["size"]
 
-                if metadata["size"] != metadata["uncompressed_size"] and metadata["compression_level"] == 0:
-                    raise Warning("Found compressed and uncompressed size mismatch for file %s" % file_name)
+                else:
+                    # struct POD2+_file { // 20 bytes POD2/3 / 28 POD4+
+                    #     uint32 file_path_offset;
+                    #     uint32 file_size; // POD4+ this is the compressed size
+                    #     uint32 file_offset;
+                    #     uint32 file_uncompressed_size; // POD4+ only
+                    #     uint32 file_compression_level; // POD4+ only
+                    #     uint32 file_timestamp;
+                    #     uint32 file_checksum;
+                    # }
+                    # char   file_name[256]; // Zero terminated string // 0x100
+                    # Seek to the start if the index entrie
+                    pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
+                    metadata["path_offset"] = self._read_uint(pod_file)
+                    metadata["size"]        = self._read_uint(pod_file)
+                    metadata["offset"]      = self._read_uint(pod_file)
+                    if self.magic == "POD4" or self.magic == "POD5":
+                        metadata["uncompressed_size"] = self._read_uint(pod_file)
+                        metadata["compression_level"] = self._read_uint(pod_file)
+                    else:
+                        metadata["uncompressed_size"] = metadata["size"]
+                    metadata["timestamp"]   = self._read_uint(pod_file)
+                    metadata["checksum"]    = self._read_uint(pod_file)
 
-            if os.path.sep != "\\":
-                file_name = file_name.replace("\\",os.path.sep)
+                    # get filename from name table
+                    # Seek to the file_name entrie
+                    pod_file.seek(self.index_offset + (self.file_count * DIR_ENTRY_SIZE) + metadata["path_offset"])
+                    file_name = self._get_c_string(pod_file.read(FILE_NAME_LENGTH))
 
-            self.file_tree[file_name] = metadata
+                    if metadata["size"] != metadata["uncompressed_size"] and metadata["compression_level"] == 0:
+                        raise Warning("Found compressed and uncompressed size mismatch for file %s" % file_name)
 
-        pod_file.close()
+                if os.path.sep != "\\":
+                    file_name = file_name.replace("\\",os.path.sep)
+
+                self.file_tree[file_name] = metadata
+
 
     def read_file(self, file_name, uncompress=False):
         """
         Reads the data from a single file inside the POD archive and returns a file-like object
         """
-        pod_file = open(self.pod_file,"rb")
-        pod_file.seek(self.file_tree[file_name]["offset"])
-        data = pod_file.read(self.file_tree[file_name]["size"])
-        if uncompress:
-            data = self.uncompress(data)
-        return StringIO(data)
+        with open(self.pod_file, "rb") as pod_file:
+
+            pod_file.seek(self.file_tree[file_name]["offset"])
+            data = pod_file.read(self.file_tree[file_name]["size"])
+            if uncompress:
+                data = self.uncompress(data)
+            return BytesIO(data)
 
     def uncompress(self, data):
         """
@@ -396,15 +392,17 @@ def list_files(pod, pattern=None, include_details=False):
             date = "n/a"
 
         if include_details:
-            print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
+            if pod.magic == "POD4" or pod.magic == "POD5":
+                print("%s Date:%s Offset:%s Size:%s/%s compression level: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["uncompressed_size"], file_metadata["compression_level"]))
+            else:
+                print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
         else:
-            print file_name
+            print(file_name)
 
 def extract_files(pod, dest_dir, pattern=None):
     for file_name, file_metadata in sorted(pod):
         if pattern and not filter_file(file_name, pattern):
             continue
-
         out_dir, base_name = os.path.split(file_name)
         out_dir = os.path.join(dest_dir,out_dir)
         full_path = os.path.join(out_dir, base_name)
@@ -413,14 +411,15 @@ def extract_files(pod, dest_dir, pattern=None):
             os.makedirs(out_dir)
 
         extract = pod.read_file(file_name)
-        out_file = open(full_path,"wb")
 
-        if file_metadata["compression_level"] > 0:
-            print("%s -> %s (compressed)"% (file_name, full_path))
-        else:
-            print("%s -> %s"% (file_name, full_path))
-        out_file.write(extract.read())
-        out_file.close()
+        with open(full_path, "wb") as out_file:
+
+            if file_metadata["compression_level"] > 0:
+                print("%s -> %s (compressed)"% (file_name, full_path))
+                #extract = pod.uncompress(extract)
+            else:
+                print("%s -> %s"% (file_name, full_path))
+            out_file.write(extract.read())
 
         if file_metadata["timestamp"]:
             os.utime(full_path,(file_metadata["timestamp"],file_metadata["timestamp"]))
