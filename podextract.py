@@ -19,35 +19,41 @@ class POD:
     #
     # POD1 (has no magic)
     # 0x00  header      84 bytes
-    # 0x54  index       40 bytes for each entrie
+    # 0x54  index       40 bytes for each entry
     #       data        starts at first file offset
     #
     # POD2
     # 0x00  header      96 bytes
-    # 0x60  index       20 bytes for each entrie
+    # 0x60  index       20 bytes for each entry
     #       data        starts at first file offset
     #
     # POD3
     # 0x00  header      288 bytes
     # 0x120 data        starts at first file offset
-    #       index       20 bytes for each entrie
+    #       index       20 bytes for each entry
     #       path table  after the index comes the path table
     #
     # POD4
     # 0x00  header       288 bytes
     # 0x120 data         starts at first file offset
-    #       index        28 bytes for each entrie 
+    #       index        28 bytes for each entry 
     #       path table  after the index comes the path table
     #
     # POD5
     # 0x00  header      368 bytes
     # 0x170 data        starts at first file offset
-    #       index       28 bytes for each entrie 
+    #       index       28 bytes for each entry 
+    #       path table  after the index comes the path table
+    #
+    # POD6
+    # 0x00  header      20 bytes
+    # 0x14  data        starts at first file offset
+    #       index       24 bytes for each entry
     #       path table  after the index comes the path table
     #
     # EPD / Enhanced POD magic dtxe
     # 0x00  header      272 bytes
-    # 0x110 index       80 bytes for each entrie
+    # 0x110 index       80 bytes for each entry
     #       data        starts at first file offset
     #       path table  after the index comes the path table
     #
@@ -330,7 +336,7 @@ class POD:
                     #     uint32 file_checksum;
                     # }
                     # char   file_name[256]; // Zero terminated string // 0x100
-                    # Seek to the start if the index entrie
+                    # Seek to the start if the index entry
                     pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
                     metadata["path_offset"] = self._read_uint(pod_file)
                     metadata["size"]        = self._read_uint(pod_file)
