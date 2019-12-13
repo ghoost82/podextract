@@ -48,11 +48,14 @@ optional arguments:
   - Samurai Shodown Anthology
 - POD Version 5
   - Ghostbusters: The Video Game
+- POD Version 6
+  - Ghostbusters: The Video Game Remastered
 
 ## Credits
 
-Information about the POD file format was taken from [jtrfp][], [DragonUnPACKer][] and [Ghostbusters Unpack][]
+Information about the POD file format was taken from [jtrfp][], [DragonUnPACKer][], [Ghostbusters Unpack][] and [QuickBMS][]
 
 [jtrfp]: https://github.com/jtrfp/jtrfp
 [DragonUnPACKer]: https://github.com/elbereth/DragonUnPACKer
 [Ghostbusters Unpack]: http://svn.gib.me/public/ghostbusters/trunk/
+[QuickBMS]: https://aluigi.altervista.org/quickbms.htm
