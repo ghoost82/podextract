@@ -452,7 +452,7 @@ def list_files(pod, pattern=None, include_details=False):
                     print("%s Date:%s Offset:%s Size:%s/%s Flags: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["uncompressed_size"], file_metadata["flags"]))
                 else: 
                     if pod.magic != "POD1" and pod.magic != "":
-                        print("%s Date:%s Offset:%s Size:%s Checksum %s:" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["checksum"]))
+                        print("%s Date:%s Offset:%s Size:%s Checksum: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["checksum"]))
                     else:
                         print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
 
