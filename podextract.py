@@ -19,35 +19,41 @@ class POD:
     #
     # POD1 (has no magic)
     # 0x00  header      84 bytes
-    # 0x54  index       40 bytes for each entrie
+    # 0x54  index       40 bytes for each entry
     #       data        starts at first file offset
     #
     # POD2
     # 0x00  header      96 bytes
-    # 0x60  index       20 bytes for each entrie
+    # 0x60  index       20 bytes for each entry
     #       data        starts at first file offset
     #
     # POD3
     # 0x00  header      288 bytes
     # 0x120 data        starts at first file offset
-    #       index       20 bytes for each entrie
+    #       index       20 bytes for each entry
     #       path table  after the index comes the path table
     #
     # POD4
     # 0x00  header       288 bytes
     # 0x120 data         starts at first file offset
-    #       index        28 bytes for each entrie 
+    #       index        28 bytes for each entry 
     #       path table  after the index comes the path table
     #
     # POD5
     # 0x00  header      368 bytes
     # 0x170 data        starts at first file offset
-    #       index       28 bytes for each entrie 
+    #       index       28 bytes for each entry 
+    #       path table  after the index comes the path table
+    #
+    # POD6
+    # 0x00  header      20 bytes
+    # 0x14  data        starts at first file offset
+    #       index       24 bytes for each entry
     #       path table  after the index comes the path table
     #
     # EPD / Enhanced POD magic dtxe
     # 0x00  header      272 bytes
-    # 0x110 index       80 bytes for each entrie
+    # 0x110 index       80 bytes for each entry
     #       data        starts at first file offset
     #       path table  after the index comes the path table
     #
@@ -58,7 +64,7 @@ class POD:
     file_count = None
     index_offset = None
     comment = None
-    # EPD field only
+    # EPD and POD6 field only
     version = None
     # Present in EPD and POD2+
     checksum = None
@@ -148,7 +154,7 @@ class POD:
                 self.file_count       = self._read_uint(pod_file)
                 self.audit_file_count = self._read_uint(pod_file)
                 self.index_offset     = pod_file.tell()
-
+    
             elif self.magic == "POD3" or self.magic == "POD4" or self.magic == "POD5":
                 # struct POD3+_header { // 288 bytes POD3/4 / 368 bytes POD5
                 #     char   magic[4]; // always POD3/POD4/POD5
@@ -185,7 +191,19 @@ class POD:
 
                 if self.magic == "POD5":
                     self.next_pod_file = self._get_c_string(arc.read(NEXT_ARCHIVE_LENGTH))
-
+            elif self.magic == "POD6":
+                # struct POD6_header { // 20 bytes POD6
+                #     char magic[4];   // always POD6
+                #     uint32 file_count;
+                #     uint32 version;
+                #     uint32 index_offset;
+                #     uint32 size_index;
+                # }
+                self.file_count        = self._read_uint(pod_file)
+                self.version           = self._read_uint(pod_file)
+                self.index_offset      = self._read_uint(pod_file)
+                self.size_index        = self._read_uint(pod_file)
+                pod_file.seek(self.index_offset);
             else:
                 # struct POD1_header { // 84 bytes
                 #     uint32 file_count;
@@ -215,7 +233,10 @@ class POD:
             "size" : None,
             # Present in POD5+
             "uncompressed_size" : None,
-            "compression_level" : 0 }
+            "compression_level" : 0,
+            # Present in POD6
+            "flags": None,
+            "zero": 0 }
         return file_metadata
 
     def parse_file_table(self):
@@ -233,6 +254,8 @@ class POD:
             DIR_ENTRY_SIZE = 80
         elif self.magic == "POD2" or self.magic == "POD3":
             DIR_ENTRY_SIZE = 20
+        elif self.magic == "POD6":
+            DIR_ENTRY_SIZE = 24
         else:
             DIR_ENTRY_SIZE = 28
 
@@ -272,6 +295,35 @@ class POD:
                     metadata["timestamp"]         = self._read_uint(pod_file)
                     metadata["checksum"]          = self._read_uint(pod_file)
                     metadata["uncompressed_size"] = metadata["size"]
+                elif self.magic == "POD6":
+                    # struct POD6_file { // 24 bytes POD6
+                    #     uint32 file_path_offset;
+                    #     uint32 file_size;
+                    #     uint32 file_offset;
+                    #     uint32 file_uncompressed_size;
+                    #     uint32 file_flags;
+                    #     uint32 file_zero;
+                    # }
+                    # char file_name[256]; // Zero terminated string // 0x100
+                    # Seek to the start of the index entry
+                    pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
+                    metadata["path_offset"]       = self._read_uint(pod_file)
+                    metadata["size"]              = self._read_uint(pod_file)
+                    metadata["offset"]            = self._read_uint(pod_file)
+                    metadata["uncompressed_size"] = self._read_uint(pod_file)
+                    metadata["flags"]             = self._read_uint(pod_file)
+                    #metadata["compression_level"] = metadata["flags"]
+                    metadata["zero"]              = self._read_uint(pod_file)
+                    #metadata["timestamp"] = metadata["zero"]
+                    #metadata["checksum"] = metadata["zero"]
+                    # get filename from name table
+                    # Seek to the file_name entry
+                    pod_file.seek(self.index_offset + (self.file_count * DIR_ENTRY_SIZE) + metadata["path_offset"])
+                    file_name = self._get_c_string(pod_file.read(FILE_NAME_LENGTH))
+
+                    if metadata["size"] != metadata["uncompressed_size"] and not (metadata["flags"] & 8):
+
+                        raise Warning("Found compressed and uncompressed size mismatch for file %s" % file_name)
 
                 else:
                     # struct POD2+_file { // 20 bytes POD2/3 / 28 POD4+
@@ -284,7 +336,7 @@ class POD:
                     #     uint32 file_checksum;
                     # }
                     # char   file_name[256]; // Zero terminated string // 0x100
-                    # Seek to the start if the index entrie
+                    # Seek to the start if the index entry
                     pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
                     metadata["path_offset"] = self._read_uint(pod_file)
                     metadata["size"]        = self._read_uint(pod_file)
@@ -298,11 +350,12 @@ class POD:
                     metadata["checksum"]    = self._read_uint(pod_file)
 
                     # get filename from name table
-                    # Seek to the file_name entrie
+                    # Seek to the file_name entry
                     pod_file.seek(self.index_offset + (self.file_count * DIR_ENTRY_SIZE) + metadata["path_offset"])
                     file_name = self._get_c_string(pod_file.read(FILE_NAME_LENGTH))
 
                     if metadata["size"] != metadata["uncompressed_size"] and metadata["compression_level"] == 0:
+
                         raise Warning("Found compressed and uncompressed size mismatch for file %s" % file_name)
 
                 if os.path.sep != "\\":
@@ -364,6 +417,7 @@ def print_header(pod):
 
     print("%20s: %s" % ("POD File", pod.pod_file))
     print("%20s: %s" % ("File Type", pod.magic))
+    print("%20s: %s" % ("Version", pod.version))
 
     print("%20s: %s" % ("Comment", pod.comment))
     if pod.author:
@@ -380,7 +434,6 @@ def print_header(pod):
         print("%20s: %s" % ("Checksum", pod.checksum))
     print("%20s: %s" % ("Size", os.path.getsize(pod.pod_file)))
     print("%20s: %s" % ("Number of files", num_files))
-
 def list_files(pod, pattern=None, include_details=False):
     for file_name, file_metadata in sorted(pod):
         if pattern and not filter_file(file_name, pattern):
@@ -393,9 +446,16 @@ def list_files(pod, pattern=None, include_details=False):
 
         if include_details:
             if pod.magic == "POD4" or pod.magic == "POD5":
-                print("%s Date:%s Offset:%s Size:%s/%s compression level: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["uncompressed_size"], file_metadata["compression_level"]))
+                print("%s Date:%s Offset:%s Size:%s/%s compression level: %s Checksum: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["uncompressed_size"], file_metadata["compression_level"], file_metadata["checksum"]))
             else:
-                print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
+                if pod.magic == "POD6":
+                    print("%s Date:%s Offset:%s Size:%s/%s Flags: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["uncompressed_size"], file_metadata["flags"]))
+                else: 
+                    if pod.magic != "POD1" and pod.magic != "":
+                        print("%s Date:%s Offset:%s Size:%s Checksum: %s" % (file_name, date, file_metadata["offset"], file_metadata["size"], file_metadata["checksum"]))
+                    else:
+                        print("%s Date:%s Offset:%s Size:%s" % (file_name, date, file_metadata["offset"], file_metadata["size"]))
+
         else:
             print(file_name)
 
