@@ -26,6 +26,7 @@ class POD:
     # 0x00  header      96 bytes
     # 0x60  index       20 bytes for each entry
     #       data        starts at first file offset
+    #       audit_data  312 bytes for each entry
     #
     # POD3
     # 0x00  header      288 bytes
@@ -110,7 +111,7 @@ class POD:
         return struct.unpack("I", dword)[0]
 
     def _get_c_string(self, string):
-        return string.decode("ascii").split('\x00')[0]
+        return string.decode("iso-8859-1").split('\x00')[0]
 
     def parse_header(self):
         """
@@ -123,7 +124,7 @@ class POD:
         NEXT_ARCHIVE_LENGTH =  80 #0x50
 
         with open(self.pod_file, "rb") as pod_file:
-            self.magic = pod_file.read(4).decode("ascii")
+            self.magic = pod_file.read(4).decode("iso8859-1")
 
             #EPD
             if self.magic == "dtxe":
@@ -259,9 +260,11 @@ class POD:
         else:
             DIR_ENTRY_SIZE = 28
 
-        FILE_NAME_LENGTH      = 256 #0x100
-        FILE_NAME_LENGTH_EPD  =  64 #0x40
-        FILE_NAME_LENGTH_POD1 =  32 #0x20
+        FILE_NAME_LENGTH       = 256 #0x100
+        FILE_NAME_LENGTH_EPD   =  64 #0x40
+        FILE_NAME_LENGTH_POD1  =  32 #0x20
+        AUDIT_CHECKSUM_LENGTH  =  32 #0x20
+        AUDIT_FILE_NAME_LENGTH = 264 #0x108
 
         with open(self.pod_file, "rb") as pod_file:
             pod_file.seek(self.index_offset)
@@ -335,7 +338,7 @@ class POD:
                     #     uint32 file_timestamp;
                     #     uint32 file_checksum;
                     # }
-                    # char   file_name[256]; // Zero terminated string // 0x100
+                    # char   file_name[POD_FILENAME_LENGTH]; // Zero terminated string // 0x108
                     # Seek to the start if the index entry
                     pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
                     metadata["path_offset"] = self._read_uint(pod_file)
