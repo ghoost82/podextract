@@ -130,7 +130,7 @@ class POD:
             if self.magic == "dtxe":
                 # struct EPD_header { 272 bytes
                 #     char   magic[4]; // always dtxe
-                #     char   comment[256]; // 0x100
+                #     char   comment[COMMENT_LENGTH_EPD]; // 0x100
                 #     uint32 file_count;
                 #     uint32 version;
                 #     uint32 checksum;
@@ -146,7 +146,7 @@ class POD:
                 # struct POD2_header { // 96 bytes
                 #     char   magic[4]; // always POD2
                 #     uint32 checksum;
-                #     char   comment[80]; // 0x50
+                #     char   comment[COMMENT_LENTH_POD]; // 0x50
                 #     uint32 file_count;
                 #     uint32 audit_file_count;
                 # }
@@ -160,20 +160,20 @@ class POD:
                 # struct POD3+_header { // 288 bytes POD3/4 / 368 bytes POD5
                 #     char   magic[4]; // always POD3/POD4/POD5
                 #     uint32 checksum;
-                #     char   comment[80]; // 0x50
+                #     char   comment[COMMENT_LENGTH_POD]; // 0x50
                 #     uint32 file_count;
                 #     uint32 audit_file_count;
                 #     uint32 revision;
                 #     uint32 priority;
-                #     char   author[80]; // 0x50
-                #     char   copyright[80]; // 0x50
+                #     char   author[AUTHOR_LENGTH]; // 0x50
+                #     char   copyright[COPYRIGHT_LENGTH]; // 0x50
                 #     uint32 index_offset;
                 #     uint32 unknown10C;
                 #     uint32 size_index;
                 #     uint32 unknown114;
                 #     uint32 unknown118;
                 #     uint32 unknown11C;
-                #     char   next_pod_file[80]; // 0x50 // POD5 only
+                #     char   next_pod_file[NEXT_ARCHIVE_LENGTH]; // 0x50 // POD5 only
                 # }
                 self.checksum         = self._read_uint(pod_file)
                 self.comment          = self._get_c_string(pod_file.read(COMMENT_LENGTH_POD))
@@ -208,7 +208,7 @@ class POD:
             else:
                 # struct POD1_header { // 84 bytes
                 #     uint32 file_count;
-                #     char   comment[80]; // 0x50
+                #     char   comment[COMMENT_LENGTH_POD]; // 0x50
                 # }
                 self.magic = "POD1"
                 pod_file.seek(0)
@@ -275,7 +275,7 @@ class POD:
 
                 if self.magic == "POD1":
                     # struct POD1_file { // 40 bytes
-                    #     char   file_name[32]; // Zero terminated string // 0x20
+                    #     char   file_name[FILE_NAME_LENGTH_POD1]; // Zero terminated string // 0x20
                     #     uint32 file_size;
                     #     uint32 file_offset;
                     # }
@@ -286,7 +286,7 @@ class POD:
 
                 elif self.magic == "EPD":
                     # struct EPD_file { // 80 bytes
-                    #     char   file_name[64]; // Zero terminated string // 0x40
+                    #     char   file_name[FILE_NAME_LENGTH_EPD]; // Zero terminated string // 0x40
                     #     uint32 file_size;
                     #     uint32 file_offset;
                     #     uint32 file_timestamp;
@@ -307,7 +307,7 @@ class POD:
                     #     uint32 file_flags;
                     #     uint32 file_zero;
                     # }
-                    # char file_name[256]; // Zero terminated string // 0x100
+                    # char file_name[FILE_NAME_LENGTH]; // Zero terminated string // 0x100
                     # Seek to the start of the index entry
                     pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
                     metadata["path_offset"]       = self._read_uint(pod_file)
@@ -338,7 +338,7 @@ class POD:
                     #     uint32 file_timestamp;
                     #     uint32 file_checksum;
                     # }
-                    # char   file_name[POD_FILENAME_LENGTH]; // Zero terminated string // 0x108
+                    # char   file_name[FILE_NAME_LENGTH]; // Zero terminated string // 0x108
                     # Seek to the start if the index entry
                     pod_file.seek(self.index_offset + (index * DIR_ENTRY_SIZE))
                     metadata["path_offset"] = self._read_uint(pod_file)
