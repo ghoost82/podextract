@@ -111,7 +111,7 @@ class POD:
         return struct.unpack("I", dword)[0]
 
     def _get_c_string(self, string):
-        return string.decode("iso-8859-1").split('\x00')[0]
+        return string.decode("latin1").split('\x00')[0]
 
     def parse_header(self):
         """
@@ -124,7 +124,7 @@ class POD:
         NEXT_ARCHIVE_LENGTH =  80 #0x50
 
         with open(self.pod_file, "rb") as pod_file:
-            self.magic = pod_file.read(4).decode("iso8859-1")
+            self.magic = pod_file.read(4).decode("latin1")
 
             #EPD
             if self.magic == "dtxe":
